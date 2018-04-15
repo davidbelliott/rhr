@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block body %}
+    <form method="post" action="{{ url_for('index') }}">
+    <div class="wrapper">
+        {% for student in student_names %}
+        <div class="panel">
+            <input id="{{ student }}Box" type="checkbox" name="{{ student }}">
+            <label for="{{ student }}Box">{{ student }}</label>
+        </div>
+        {% endfor %}
+    </div>
+    <input id="emailBox" type="checkbox" name="emails">
+    <label for="emailBox">Receive emails?</label>
+    <input type="submit" value="submit" />
+    </form>
+{% endblock %}
+
