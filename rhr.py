@@ -1,15 +1,123 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, flash, url_for
+from flask_login import LoginManager, UserMixin, current_user, login_user, logout_user, login_required
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, BooleanField, SubmitField
+from wtforms.validators import ValidationError, DataRequired, Email, EqualTo
+from werkzeug.security import generate_password_hash, check_password_hash
+import string
 import csv
+import random
+import datetime
 
 app = Flask(__name__)
-app.config.from_object('config')
+app.config.from_object('config.Config')
+app.config.from_object('instance.config')
 
-@app.route('/')
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+login = LoginManager(app)
+login.login_view = 'login'
+
+class LoginForm(FlaskForm):
+    email = StringField('Caltech email', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Log in')
+
+class RegistrationForm(FlaskForm):
+    email = StringField('Caltech email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Register')
+
+    def validate_email(self, email):
+        user = User.query.filter_by(email=email.data).first()
+        if user is None:
+            raise ValidationError('Caltech email address not found')
+        if user.registered:
+            raise ValidationError('Email address already registered')
+
+like = db.Table('likes',
+        db.Column('liker_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+        db.Column('liked_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+)
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), index=True, unique=True)
+    name = db.Column(db.String(120), index=True)
+    password_hash = db.Column(db.String(128))
+    registered = db.Column(db.Boolean)
+    likes = db.relationship('User', secondary=like, lazy='subquery',
+            primaryjoin=id==like.c.liker_id,
+            secondaryjoin=id==like.c.liked_id)
+
+    def __repr__(self):
+        return '<User {}>'.format(self.email)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+def make_password(length, alphabet):
+    return ''.join(random.choice(alphabet) for _ in range(length))
+
+@login.user_loader
+def load_user(user_id):
+    return User.query.filter_by(id=user_id).first()
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    users = User.query.all()
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid email or password')
+            return redirect(url_for('login'))
+        login_user(user)
+        return redirect(url_for('index'))
+    return render_template('login.html', form=form, users=users)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        password = make_password(8, string.ascii_letters)
+        user.set_password(password)
+        db.session.commit()
+        flash('Password: ' + password)
+        flash('You are now a registered user')
+        return redirect(url_for('login'))
+    return render_template('register.html', form=form)
+
+@app.route('/', methods=['GET', 'POST'])
+@login_required
 def index():
-    with open("students.txt") as tsv:
-        rows = [line for line in csv.reader(tsv, dialect="excel-tab")]
-        columns = list(zip(*rows))
-        print(rows)
-        print(columns)
-        student_names = columns[0]
-    return render_template('index.html', student_names=student_names)
+    users = User.query.all()
+    if request.method == 'GET':
+        return render_template('index.html', users=users, liked_students = current_user.likes)
+    elif request.method == 'POST':
+        result = request.form
+        liked = [User.query.get(key) for key, _ in result.items() if User.query.get(key) is not None]
+        if(len(liked) > app.config['MAX_CHECKS']):
+            flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
+            return render_template('index.html', users=users, liked_students=current_user.likes)
+        else:
+            current_user.likes = liked
+            db.session.commit()
+            return render_template('index.html', users=users, \
+                liked_students=current_user.likes)
+

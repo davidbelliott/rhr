@@ -2,10 +2,10 @@
 {% block body %}
     <form method="post" action="{{ url_for('index') }}">
     <div class="wrapper">
-        {% for student in student_names %}
-        <div class="panel">
-            <input id="{{ student }}Box" type="checkbox" name="{{ student }}">
-            <label for="{{ student }}Box">{{ student }}</label>
+        {% for user in users %}
+        <div class="panel{% if user in liked_students %} liked{% endif %}">
+            <input id="{{ user.id }}Box" type="checkbox" name="{{ user.id }}"{% if user in liked_students %} checked="checked"{% endif %}>
+            <label for="{{ user.id }}Box">{{ user.name }}</label>
         </div>
         {% endfor %}
     </div>

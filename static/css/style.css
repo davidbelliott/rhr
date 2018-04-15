@@ -14,6 +14,10 @@ p {
   margin: 0 0 1em 0;
 }
 
+.liked {
+    background-color: #FFBC92;
+}
+
 .wrapper {
     display: block;
   margin: 0px 0px 20px 0px;
@@ -24,6 +28,9 @@ p {
   border-bottom: 1px solid black;
 }
 
+.flashes {
+    color: red;
+}
 
 /* no grid support? */
 

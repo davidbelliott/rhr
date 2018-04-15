@@ -9,7 +9,16 @@
         {% endblock %}
     </head>
     <body>
-        <h3>right-hand rule</h3>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="flashes">
+            {% for message in messages %}
+            [{{ message }}]
+            {% endfor %}
+            </div>
+        {% endif %}
+        {% endwith %}
+        <h2>right-hand rule</h2>
         {% block body %}
         {% endblock %}
     </body>

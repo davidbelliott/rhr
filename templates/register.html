@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block body %}
+<h3>Register</h3>
+    <p>This will send an email to your caltech email with a temp password.</p>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.email.label }}<br>
+            {{ form.email(size=64) }}<br>
+            {% for error in form.email.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+</form>
+{% endblock %}
