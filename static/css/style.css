@@ -6,7 +6,7 @@
 
 body {
   margin: 40px;
-  background-color: #FFFFD8;
+  background-color: lightgoldenrodyellow;
 }
 
 h1,
@@ -14,8 +14,12 @@ p {
   margin: 0 0 1em 0;
 }
 
-.liked {
-    background-color: #FFBC92;
+.like {
+    background-color: yellow;
+}
+
+.match {
+    background-color: hotpink;
 }
 
 .wrapper {

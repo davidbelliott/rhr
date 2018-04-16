@@ -107,17 +107,15 @@ def register():
 @login_required
 def index():
     users = User.query.all()
-    if request.method == 'GET':
-        return render_template('index.html', users=users, liked_students = current_user.likes)
-    elif request.method == 'POST':
+    if request.method == 'POST':
         result = request.form
-        liked = [User.query.get(key) for key, _ in result.items() if User.query.get(key) is not None]
-        if(len(liked) > app.config['MAX_CHECKS']):
+        new_likes = [User.query.get(key) for key, _ in result.items() if User.query.get(key) is not None]
+        if(len(new_likes) > app.config['MAX_CHECKS']):
             flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
-            return render_template('index.html', users=users, liked_students=current_user.likes)
         else:
-            current_user.likes = liked
+            current_user.likes = new_likes
             db.session.commit()
-            return render_template('index.html', users=users, \
-                liked_students=current_user.likes)
 
+    likes = current_user.likes
+    matches = [like for like in likes if current_user in like.likes]
+    return render_template('index.html', users=users, likes=likes, matches=matches)
