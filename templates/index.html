@@ -5,13 +5,15 @@
     <form method="post" action="{{ url_for('index') }}">
     <div class="wrapper">
         {% for user in users %}
+        {% if user != current_user %}
         <div class="panel{% if user in matches %} match{% elif user in likes %} like{% endif %}">
             <input id="{{ user.id }}Box" type="checkbox" name="{{ user.id }}"{% if user in likes %} checked="checked"{% endif %}>
             <label for="{{ user.id }}Box">{{ user.name }}</label>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
-    <input id="emailBox" type="checkbox" name="emails">
+    <input id="emailBox" type="checkbox" name="emails"{% if current_user.subscribed %} checked="checked"{% endif %}>
     <label for="emailBox">Receive emails?</label>
     <input type="submit" value="submit" />
     </form>
