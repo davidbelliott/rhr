@@ -3,6 +3,7 @@ from flask_login import LoginManager, UserMixin, current_user, login_user, logou
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_wtf import FlaskForm
+from peewee import *
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -113,7 +114,7 @@ def register():
 @login_required
 def index():
     users = User.query.all()
-    current_likes = current_user.liker
+    current_likes = Like.query.filter_by(liker_id=current_user.id)
     if request.method == 'POST':
         result = request.form
         new_likes = []
@@ -125,6 +126,10 @@ def index():
         if(len(new_likes) > app.config['MAX_CHECKS']):
             flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
         else:
+            for like in current_likes:
+                if like not in new_likes:
+                    db.session.delete(like)
+                    db.session.commit()
             for like in new_likes:
                 if like not in current_likes:
                     db.session.add(like)
