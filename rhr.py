@@ -37,10 +37,16 @@ class RegistrationForm(FlaskForm):
         if user.registered:
             raise ValidationError('Email address already registered')
 
-like = db.Table('likes',
+'''like = db.Table('likes',
         db.Column('liker_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
         db.Column('liked_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
-)
+)'''
+
+
+
+class Like(db.Model):
+    liker_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
+    liked_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -48,9 +54,9 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(120), index=True)
     password_hash = db.Column(db.String(128))
     registered = db.Column(db.Boolean)
-    likes = db.relationship('User', secondary=like, lazy='subquery',
-            primaryjoin=id==like.c.liker_id,
-            secondaryjoin=id==like.c.liked_id)
+    subscribed = db.Column(db.Boolean)
+    liked = db.relationship("Like", backref="liked", primaryjoin=id==Like.liked_id)
+    liker = db.relationship("Like", backref="liker", primaryjoin=id==Like.liker_id)
 
     def __repr__(self):
         return '<User {}>'.format(self.email)
@@ -107,17 +113,23 @@ def register():
 @login_required
 def index():
     users = User.query.all()
-    if request.method == 'GET':
-        return render_template('index.html', users=users, liked_students = current_user.likes)
-    elif request.method == 'POST':
+    current_likes = current_user.liker
+    if request.method == 'POST':
         result = request.form
-        liked = [User.query.get(key) for key, _ in result.items() if User.query.get(key) is not None]
-        if(len(liked) > app.config['MAX_CHECKS']):
-            flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
-            return render_template('index.html', users=users, liked_students=current_user.likes)
-        else:
-            current_user.likes = liked
-            db.session.commit()
-            return render_template('index.html', users=users, \
-                liked_students=current_user.likes)
+        new_likes = []
+        for key, _ in result.items():
+            liked_user = User.query.get(key)
+            if liked_user is not None:
+                new_likes.append(Like(liker=current_user, liked=liked_user))
 
+        if(len(new_likes) > app.config['MAX_CHECKS']):
+            flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
+        else:
+            for like in new_likes:
+                if like not in current_likes:
+                    db.session.add(like)
+                    db.session.commit()
+
+    liked_users = [like.liked for like in current_user.liker]
+    matches = [like.liker for like in current_user.liked if like.liker in liked_users]
+    return render_template('index.html', users=users, likes=liked_users, matches=matches)
