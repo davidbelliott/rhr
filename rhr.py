@@ -153,9 +153,18 @@ def create_tables():
     with db:
         db.create_tables([User, Like])
 
+def load_users(filename):
+        with open(filename) as tsv:
+            with db:
+                for line in csv.reader(tsv, dialect="excel-tab"):
+                    try:
+                        user = User.create(name=line[0], email=line[1], registered=0, subscribed=0, password_hash='')
+                    except Exception as e:
+                        print("Exception: {}".format(str(e)))
+                    print(user)
+
 def make_password(length, alphabet):
-    #return ''.join(random.choice(alphabet) for _ in range(length))
-    return 'p'
+    return ''.join(random.choice(alphabet) for _ in range(length))
 
 @login.user_loader
 def load_user(user_id):
@@ -181,6 +190,9 @@ def login():
         try:
             with db:
                 user = User.get(User.email == form.email.data)
+                if user.registered == 0:
+                    user.registered = 1
+                    user.save()
             found_user = True
         except User.DoesNotExist:
             user = None
@@ -209,16 +221,14 @@ def register():
             user = User.get(User.email == form.email.data)
             #if(user.registered == 0):
             if(True):
-                user.registered = 1
                 user.subscribed = 1
                 password = make_password(8, string.ascii_letters)
                 user.set_password(password)
                 user.save()
-                flash('Password: ' + password)
                 
                 # Send email with temp password
                 subject = "RHR registration successful"
-                msg = "Your temp password is {}".format(password)
+                msg = "Your temp password is {}\nIf you did not register, please ignore this email.".format(password)
                 SendMessage(SENDER_EMAIL, user.email, subject, msg)
 
 
@@ -309,7 +319,7 @@ def index():
                         flash('New match with {}!'.format(their_user.name))
                         if their_user.subscribed:
                             # send notification email
-                            subject = '{} matched with you on RHR!'.format(current_user.name)
+                            subject = '{} matched with you on RHR'.format(current_user.name)
                             msg = 'Hit them up at {}'.format(current_user.email)
                             #SendMessage(SENDER_EMAIL, their_user.email, subject, msg)
                             flash('They have been notified!')
