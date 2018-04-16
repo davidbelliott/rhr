@@ -10,6 +10,62 @@ import string
 import csv
 import random
 import datetime
+import httplib2
+import os
+import oauth2client
+from oauth2client import client, tools
+import base64
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from apiclient import errors, discovery
+
+SCOPES = 'https://www.googleapis.com/auth/gmail.send'
+CLIENT_SECRET_FILE = 'instance/client_secret.json'
+APPLICATION_NAME = 'Gmail API Python Send Email'
+SENDER_EMAIL = 'thempaulschlacter1911@gmail.com'
+
+def get_credentials():
+    home_dir = os.path.expanduser('~')
+    credential_dir = os.path.join(home_dir, '.credentials')
+    if not os.path.exists(credential_dir):
+        os.makedirs(credential_dir)
+    credential_path = os.path.join(credential_dir, 'gmail-python-email-send.json')
+    store = oauth2client.file.Storage(credential_path)
+    credentials = store.get()
+    if not credentials or credentials.invalid:
+        flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
+        flow.user_agent = APPLICATION_NAME
+        credentials = tools.run_flow(flow, store)
+        print('Storing credentials to ' + credential_path)
+    return credentials
+
+def SendMessage(sender, to, subject, msgPlain):
+    credentials = get_credentials()
+    http = credentials.authorize(httplib2.Http())
+    service = discovery.build('gmail', 'v1', http=http)
+    message1 = CreateMessage(sender, to, subject, msgPlain)
+    SendMessageInternal(service, "me", message1)
+
+def SendMessageInternal(service, user_id, message):
+    try:
+        message = (service.users().messages().send(userId=user_id, body=message).execute())
+        print('Message Id: %s' % message['id'])
+        return message
+    except errors.HttpError as error:
+        print('An error occurred: %s' % error)
+
+def CreateMessage(sender, to, subject, msgPlain):
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = to
+    msg.attach(MIMEText(msgPlain, 'plain'))
+    raw = base64.urlsafe_b64encode(msg.as_bytes())
+    raw = raw.decode()
+    body = {'raw': raw}
+    return body
+
+
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
@@ -19,6 +75,9 @@ db = SqliteDatabase('app.db')
 
 login = LoginManager(app)
 login.login_view = 'login'
+
+
+
 
 class LoginForm(FlaskForm):
     email = StringField('Caltech email', validators=[DataRequired()])
@@ -33,6 +92,12 @@ class RegistrationForm(FlaskForm):
         user = User.get(User.email == email.data)
         if user is None:
             raise ValidationError('Caltech email address not found')
+
+class ChangePasswordForm(FlaskForm):
+    password = PasswordField('Current password', validators=[DataRequired()])
+    new_password = PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
+    new_password_2 = PasswordField('Confirm new password', validators=[DataRequired()])
+    submit = SubmitField('Change password')
 
 '''like = db.Table('likes',
         db.Column('liker_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
@@ -112,11 +177,15 @@ def login():
         return redirect(url_for('index'))
     form = LoginForm()
     if form.validate_on_submit():
-        #try:
-        with db:
-            user = User.get(User.email == form.email.data)
-        #except
-        if user is None or not user.check_password(form.password.data):
+        found_user = False
+        try:
+            with db:
+                user = User.get(User.email == form.email.data)
+            found_user = True
+        except User.DoesNotExist:
+            user = None
+            pass
+        if not found_user or not user.check_password(form.password.data) or not user.registered:
             flash('Invalid email or password')
             return redirect(url_for('login'))
         login_user(user)
@@ -146,6 +215,13 @@ def register():
                 user.set_password(password)
                 user.save()
                 flash('Password: ' + password)
+                
+                # Send email with temp password
+                subject = "RHR registration successful"
+                msg = "Your temp password is {}".format(password)
+                SendMessage(SENDER_EMAIL, user.email, subject, msg)
+
+
         flash('Check your email. If you are not already registered, you will have received an email with a temp password.')
         success = True
         #except User.DoesNotExist:
@@ -156,6 +232,28 @@ def register():
     else:
         return render_template('register.html', form=form)
 
+@app.route('/change-password', methods=['GET', 'POST'])
+def change_password():
+    success = False
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        #try:
+        with db:
+            if(current_user.check_password(form.password.data)):
+                current_user.set_password(form.new_password.data)
+                current_user.save()
+                flash('Password change success!')
+                success = True
+            else:
+                flash('Incorrect current password')
+        #except User.DoesNotExist:
+            #flash('This user does not exist')
+
+    if success:
+        return redirect(url_for('login'))
+    else:
+        return render_template('change-password.html', form=form)
+
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
@@ -163,13 +261,21 @@ def index():
     if request.method == 'POST':
         result = request.form
         new_likes = []
+        subscribed = False
         for key, _ in result.items():
             try:
                 liked_user = User.get(User.id == int(key))
                 if liked_user is not None:
                     new_likes.append((current_user, liked_user))
-            except ValueError:
-                pass
+            except ValueError: # this is not a user key
+                print(key)
+                if key == 'emails':
+                    subscribed = True
+        # Update email preferences
+        if subscribed != current_user.subscribed:
+            with db:
+                current_user.subscribed = subscribed
+                current_user.save()
 
         if(len(new_likes) > app.config['MAX_CHECKS']):
             flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
@@ -200,9 +306,12 @@ def index():
 
                     # Notify of match
                     if my_like.notified == 0 and their_like.notified == 0:
-                        if current_user.subscribed:
-                            flash('New match with {}!'.format(their_user.name))
+                        flash('New match with {}!'.format(their_user.name))
                         if their_user.subscribed:
+                            # send notification email
+                            subject = '{} matched with you on RHR!'.format(current_user.name)
+                            msg = 'Hit them up at {}'.format(current_user.email)
+                            #SendMessage(SENDER_EMAIL, their_user.email, subject, msg)
                             flash('They have been notified!')
                         their_like.notified = 1
                         their_like.save()
