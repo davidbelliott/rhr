@@ -4,21 +4,32 @@
         {% block head %}
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{% block title %}right-hand rule{% endblock %}</title>
+        <title>{% block title %}Right-Hand Rule{% endblock %}</title>
         <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
         {% endblock %}
     </head>
     <body>
         {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="flashes">
-            {% for message in messages %}
-            [{{ message }}]
-            {% endfor %}
-            </div>
+        {% if self.links() | trim or messages %}
+        <div class="links">
+            {% block links %}
+            {% endblock %}
+            {% if messages %}
+                <div class="flashes">
+                {% for message in messages %}
+                [{{ message }}]
+                {% endfor %}
+                </div>
+            {% endif %}
+        </div>
         {% endif %}
         {% endwith %}
-        <h2>right-hand rule</h2>
         {% block body %}
         {% endblock %}
+        {% if self.footer() | trim %}
+        <div class="footer">
+            {% block footer %}
+            {% endblock %}
+        </div>
+        {% endif %}
     </body>

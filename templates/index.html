@@ -1,18 +1,31 @@
 {% extends "layout.html" %}
+{% block links %}
+    {{ current_user.email }}
+    <a href="{{url_for('change_password')}}">[Change Password]</a>
+    <a href="{{url_for('logout')}}">[Log Out]</a>
+{% endblock %}
 {% block body %}
-    {{ likes }}
-    <p>Check the boxes of people you'd be interested in forming a "one-on-one study group" with. Nobody can see your selections, but if you and someone else both check each other, you'll both be notified.</p>
+<div class="container">
+    <h2>Right-Hand Rule</h2>
+    <p>Check the boxes of up to {{ max_checks }} people you're interested in. Nobody can see your selections, but if you and someone else both check each other, you'll both be notified.</p>
+    <p>Key: <span class="like">you like</span>, <span class="match">both like</span></p>
     <form method="post" action="{{ url_for('index') }}">
     <div class="wrapper">
         {% for user in users %}
+        {% if user != current_user %}
         <div class="panel{% if user in matches %} match{% elif user in likes %} like{% endif %}">
             <input id="{{ user.id }}Box" type="checkbox" name="{{ user.id }}"{% if user in likes %} checked="checked"{% endif %}>
             <label for="{{ user.id }}Box">{{ user.name }}</label>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
-    <input id="emailBox" type="checkbox" name="emails">
+    <input id="emailBox" type="checkbox" name="emails"{% if current_user.subscribed %} checked="checked"{% endif %}>
     <label for="emailBox">Receive emails?</label>
     <input type="submit" value="submit" />
     </form>
+</div>
+{% endblock %}
+{% block footer %}
+Powered by Distributed Table Fragmentation (DTF)
 {% endblock %}
