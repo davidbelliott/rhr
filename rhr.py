@@ -3,7 +3,7 @@ from flask_login import LoginManager, UserMixin, current_user, login_user, logou
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from peewee import *
-from wtforms import StringField, PasswordField, BooleanField, SubmitField
+import wtforms
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo
 from werkzeug.security import generate_password_hash, check_password_hash
 import string
@@ -21,7 +21,7 @@ from apiclient import errors, discovery
 
 SCOPES = 'https://www.googleapis.com/auth/gmail.send'
 CLIENT_SECRET_FILE = 'instance/client_secret.json'
-APPLICATION_NAME = 'Gmail API Python Send Email'
+APPLICATION_NAME = 'rhr'
 SENDER_EMAIL = 'thempaulschlacter1911@gmail.com'
 
 def get_credentials():
@@ -76,17 +76,15 @@ db = SqliteDatabase('app.db')
 login = LoginManager(app)
 login.login_view = 'login'
 
-
-
-
 class LoginForm(FlaskForm):
-    email = StringField('Caltech email', validators=[DataRequired()])
-    password = PasswordField('Password', validators=[DataRequired()])
-    submit = SubmitField('Log in')
+    email = wtforms.StringField('Caltech email', validators=[DataRequired(), Email()])
+    password = wtforms.PasswordField('Password', validators=[DataRequired()])
+    submit = wtforms.SubmitField('Log in')
 
 class RegistrationForm(FlaskForm):
-    email = StringField('Caltech email', validators=[DataRequired()])
-    submit = SubmitField('Register')
+    email = wtforms.StringField('Caltech email', validators=[DataRequired(), Email()])
+    eighteen = wtforms.BooleanField('18 or over?', validators=[DataRequired(message='You must certify you are 18 or over to proceed.')])
+    submit = wtforms.SubmitField('Register')
 
     def validate_email(self, email):
         user = User.get(User.email == email.data)
@@ -94,16 +92,10 @@ class RegistrationForm(FlaskForm):
             raise ValidationError('Caltech email address not found')
 
 class ChangePasswordForm(FlaskForm):
-    password = PasswordField('Current password', validators=[DataRequired()])
-    new_password = PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
-    new_password_2 = PasswordField('Confirm new password', validators=[DataRequired()])
-    submit = SubmitField('Change password')
-
-'''like = db.Table('likes',
-        db.Column('liker_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
-        db.Column('liked_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
-)'''
-
+    password = wtforms.PasswordField('Current password', validators=[DataRequired()])
+    new_password = wtforms.PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
+    new_password_2 = wtforms.PasswordField('Confirm new password', validators=[DataRequired()])
+    submit = wtforms.SubmitField('Change password')
 
 class User(UserMixin, Model):
     email = CharField(unique=True)
@@ -135,7 +127,6 @@ class User(UserMixin, Model):
             .select()
             .join(Like, on=Like.from_user)
             .where(Like.liked == self))
-
 
 class Like(Model):
     liker = ForeignKeyField(User, backref='likes')
@@ -190,8 +181,9 @@ def login():
         try:
             with db:
                 user = User.get(User.email == form.email.data)
-                if user.registered == 0:
+                if user.registered == 0: # first login
                     user.registered = 1
+                    user.subscribed = 1
                     user.save()
             found_user = True
         except User.DoesNotExist:
@@ -213,31 +205,24 @@ def logout():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-    success = False
     form = RegistrationForm()
     if form.validate_on_submit():
-        #try:
-        with db:
-            user = User.get(User.email == form.email.data)
-            #if(user.registered == 0):
-            if(True):
-                user.subscribed = 1
-                password = make_password(8, string.ascii_letters)
-                user.set_password(password)
-                user.save()
-                
-                # Send email with temp password
-                subject = "RHR registration successful"
-                msg = "Your temp password is {}\nIf you did not register, please ignore this email.".format(password)
-                SendMessage(SENDER_EMAIL, user.email, subject, msg)
-
-
+        try:
+            with db:
+                user = User.get(User.email == form.email.data)
+                if(user.registered == 0):
+                    password = make_password(8, string.ascii_letters)
+                    user.set_password(password)
+                    user.save()
+                    
+                    # Send email with temp password
+                    subject = "RHR registration successful"
+                    msg = "Your temp password is {}\nIf you did not register, please ignore this email.".format(password)
+                    SendMessage(SENDER_EMAIL, user.email, subject, msg)
+        except User.DoesNotExist:
+            pass
         flash('Check your email. If you are not already registered, you will have received an email with a temp password.')
-        success = True
-        #except User.DoesNotExist:
-            #flash('This user does not exist')
-
-    if success:
+            
         return redirect(url_for('login'))
     else:
         return render_template('register.html', form=form)
@@ -247,7 +232,6 @@ def change_password():
     success = False
     form = ChangePasswordForm()
     if form.validate_on_submit():
-        #try:
         with db:
             if(current_user.check_password(form.password.data)):
                 current_user.set_password(form.new_password.data)
@@ -256,8 +240,6 @@ def change_password():
                 success = True
             else:
                 flash('Incorrect current password')
-        #except User.DoesNotExist:
-            #flash('This user does not exist')
 
     if success:
         return redirect(url_for('login'))
@@ -319,13 +301,13 @@ def index():
                         flash('New match with {}!'.format(their_user.name))
                         if their_user.subscribed:
                             # send notification email
-                            subject = '{} matched with you on RHR'.format(current_user.name)
-                            msg = 'Hit them up at {}'.format(current_user.email)
-                            #SendMessage(SENDER_EMAIL, their_user.email, subject, msg)
-                            flash('They have been notified!')
+                            subject = '{} would like to connect with you on RHR'.format(current_user.name)
+                            msg = 'Contact them at {}'.format(current_user.email)
+                            SendMessage(SENDER_EMAIL, their_user.email, subject, msg)
+                            flash('They have been notified.')
                         their_like.notified = 1
                         their_like.save()
                         my_like.notified = 1
                         my_like.save()
 
-    return render_template('index.html', current_user=current_user, users=users, likes=liked_users, matches=matched_users)
+    return render_template('index.html', current_user=current_user, users=users, likes=liked_users, matches=matched_users, max_checks=app.config['MAX_CHECKS'])

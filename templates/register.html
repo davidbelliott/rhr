@@ -1,16 +1,27 @@
 {% extends "layout.html" %}
+{% block links %}
+    <a href="{{url_for('login')}}">[Log In]</a>
+{% endblock %}
 {% block body %}
+<div class="container center">
+<h2>Right-Hand Rule</h2>
 <h3>Register</h3>
-    <p>This will send an email to your caltech email with a temp password.</p>
+    <p>This will send an email to your Caltech email with a temp password.</p>
     <form action="" method="post">
         {{ form.hidden_tag() }}
         <p>
             {{ form.email.label }}<br>
-            {{ form.email(size=64) }}<br>
+            {{ form.email(size=32) }}<br>
             {% for error in form.email.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}<br>
+            {{ form.eighteen }}
+            {{ form.eighteen.label }}<br>
+            {% for error in form.eighteen.errors %}
             <span style="color: red;">[{{ error }}]</span>
             {% endfor %}
         </p>
         <p>{{ form.submit() }}</p>
 </form>
+</div>
 {% endblock %}
