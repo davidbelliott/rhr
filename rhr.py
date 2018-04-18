@@ -187,7 +187,7 @@ def login():
             user = None
             pass
 
-        if not found_user or not user.check_password(form.password.data) or not user.registered: # unsuccessful login
+        if not found_user or not user.check_password(form.password.data): # unsuccessful login
             flash('Invalid email or password')
             return redirect(url_for('login'))
         else: # successful login
@@ -196,7 +196,7 @@ def login():
                 user.subscribed = 1
                 user.save()
             login_user(user)
-	    return redirect(url_for('index'))
+            return redirect(url_for('index'))
     return render_template('login.html', form=form, users=users)
 
 @app.route('/logout')
