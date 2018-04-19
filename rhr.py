@@ -10,61 +10,59 @@ import string
 import csv
 import random
 import datetime
-import httplib2
 import os
-import oauth2client
-from oauth2client import client, tools
-import base64
+import smtplib  
+import email.utils
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from apiclient import errors, discovery
 
-SCOPES = 'https://www.googleapis.com/auth/gmail.send'
-CLIENT_SECRET_FILE = 'instance/client_secret.json'
-APPLICATION_NAME = 'rhr'
-SENDER_EMAIL = 'thempaulschlacter1911@gmail.com'
+# Email sender address
+SENDER = 'noreply@rhr.fun'  
+SENDERNAME = 'RHR'
+# Amazon SES SMTP user name.
+USERNAME_SMTP = "AKIAIEDODYRTIGBHLAQQ"
 
-def get_credentials():
-    home_dir = os.path.expanduser('~')
-    credential_dir = os.path.join(home_dir, '.credentials')
-    if not os.path.exists(credential_dir):
-        os.makedirs(credential_dir)
-    credential_path = os.path.join(credential_dir, 'gmail-python-email-send.json')
-    store = oauth2client.file.Storage(credential_path)
-    credentials = store.get()
-    if not credentials or credentials.invalid:
-        flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
-        flow.user_agent = APPLICATION_NAME
-        credentials = tools.run_flow(flow, store)
-        print('Storing credentials to ' + credential_path)
-    return credentials
+# Amazon SES SMTP password.
+PASSWORD_SMTP = "AmkkRNWkVU+JrHBoEmrhBj9Uks/LS9NaD7HhFTR7J0B/"
 
-def SendMessage(sender, to, subject, msgPlain):
-    credentials = get_credentials()
-    http = credentials.authorize(httplib2.Http())
-    service = discovery.build('gmail', 'v1', http=http)
-    message1 = CreateMessage(sender, to, subject, msgPlain)
-    SendMessageInternal(service, "me", message1)
+# If you're using Amazon SES in an AWS Region other than US West (Oregon), 
+# replace email-smtp.us-west-2.amazonaws.com with the Amazon SES SMTP  
+# endpoint in the appropriate region.
+HOST = "email-smtp.us-west-2.amazonaws.com"
+PORT = 587
 
-def SendMessageInternal(service, user_id, message):
-    try:
-        message = (service.users().messages().send(userId=user_id, body=message).execute())
-        print('Message Id: %s' % message['id'])
-        return message
-    except errors.HttpError as error:
-        print('An error occurred: %s' % error)
-
-def CreateMessage(sender, to, subject, msgPlain):
+def send_msg(subject, recipient, text):
+    # Create message container - the correct MIME type is multipart/alternative.
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
-    msg['From'] = sender
-    msg['To'] = to
-    msg.attach(MIMEText(msgPlain, 'plain'))
-    raw = base64.urlsafe_b64encode(msg.as_bytes())
-    raw = raw.decode()
-    body = {'raw': raw}
-    return body
+    msg['From'] = email.utils.formataddr((SENDERNAME, SENDER))
+    msg['To'] = recipient
 
+    # Record the MIME types of both parts - text/plain and text/html.
+    part1 = MIMEText(text, 'plain')
+    #part2 = MIMEText(html, 'html')
+
+    # Attach parts into message container.
+    # According to RFC 2046, the last part of a multipart message, in this case
+    # the HTML message, is best and preferred.
+    msg.attach(part1)
+    #msg.attach(part2)
+
+    # Try to send the message.
+    try:  
+        server = smtplib.SMTP(HOST, PORT)
+        server.ehlo()
+        server.starttls()
+        #stmplib docs recommend calling ehlo() before & after starttls()
+        server.ehlo()
+        server.login(USERNAME_SMTP, PASSWORD_SMTP)
+        server.sendmail(SENDER, RECIPIENT, msg.as_string())
+        server.close()
+    # Display an error message if something goes wrong.
+    except Exception as e:
+        print ("Error: ", e)
+    else:
+        print ("Email sent!")
 
 
 app = Flask(__name__)
@@ -221,7 +219,7 @@ def register():
                     # Send email with temp password
                     subject = "RHR registration successful"
                     msg = "Your temp password is {}\nIf you did not register, please ignore this email.".format(password)
-                    SendMessage(SENDER_EMAIL, user.email, subject, msg)
+                    send_msg(subject, user.email, msg)
         except User.DoesNotExist:
             pass
         flash('Check your email. If you are not already registered, you will have received an email with a temp password.')
@@ -306,7 +304,7 @@ def index():
                             # send notification email
                             subject = '{} would like to connect with you on RHR'.format(current_user.name)
                             msg = 'Contact them at {}'.format(current_user.email)
-                            SendMessage(SENDER_EMAIL, their_user.email, subject, msg)
+                            send_msg(subject, their_user.email, msg)
                             flash('They have been notified.')
                         their_like.notified = 1
                         their_like.save()
