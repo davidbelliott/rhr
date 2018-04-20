@@ -56,7 +56,7 @@ def send_msg(subject, recipient, text):
         #stmplib docs recommend calling ehlo() before & after starttls()
         server.ehlo()
         server.login(USERNAME_SMTP, PASSWORD_SMTP)
-        server.sendmail(SENDER, RECIPIENT, msg.as_string())
+        server.sendmail(SENDER, recipient, msg.as_string())
         server.close()
     # Display an error message if something goes wrong.
     except Exception as e:
@@ -83,11 +83,6 @@ class RegistrationForm(FlaskForm):
     email = wtforms.StringField('Caltech email', validators=[DataRequired(), Email()])
     eighteen = wtforms.BooleanField('18 or over?', validators=[DataRequired(message='You must certify you are 18 or over to proceed.')])
     submit = wtforms.SubmitField('Register')
-
-    def validate_email(self, email):
-        user = User.get(User.email == email.data)
-        if user is None:
-            raise ValidationError('Caltech email address not found')
 
 class ChangePasswordForm(FlaskForm):
     password = wtforms.PasswordField('Current password', validators=[DataRequired()])
@@ -179,7 +174,7 @@ def login():
         found_user = False
         try:
             with db:
-                user = User.get(User.email == form.email.data)
+                user = User.get(User.email == form.email.data.lower())
             found_user = True
         except User.DoesNotExist:
             user = None
@@ -210,7 +205,7 @@ def register():
     if form.validate_on_submit():
         try:
             with db:
-                user = User.get(User.email == form.email.data)
+                user = User.get(User.email == form.email.data.lower())
                 if(user.registered == 0):
                     password = make_password(8, string.ascii_letters)
                     user.set_password(password)
