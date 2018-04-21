@@ -16,26 +16,11 @@ import email.utils
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-# Email sender address
-SENDER = 'noreply@rhr.fun'  
-SENDERNAME = 'RHR'
-# Amazon SES SMTP user name.
-USERNAME_SMTP = "AKIAIEDODYRTIGBHLAQQ"
-
-# Amazon SES SMTP password.
-PASSWORD_SMTP = "AmkkRNWkVU+JrHBoEmrhBj9Uks/LS9NaD7HhFTR7J0B/"
-
-# If you're using Amazon SES in an AWS Region other than US West (Oregon), 
-# replace email-smtp.us-west-2.amazonaws.com with the Amazon SES SMTP  
-# endpoint in the appropriate region.
-HOST = "email-smtp.us-west-2.amazonaws.com"
-PORT = 587
-
 def send_msg(subject, recipient, text):
     # Create message container - the correct MIME type is multipart/alternative.
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
-    msg['From'] = email.utils.formataddr((SENDERNAME, SENDER))
+    msg['From'] = email.utils.formataddr((app.config['SENDERNAME'], app.config['SENDER']))
     msg['To'] = recipient
 
     # Record the MIME types of both parts - text/plain and text/html.
@@ -50,12 +35,12 @@ def send_msg(subject, recipient, text):
 
     # Try to send the message.
     try:  
-        server = smtplib.SMTP(HOST, PORT)
+        server = smtplib.SMTP(app.config['HOST'], app.config['PORT'])
         server.ehlo()
         server.starttls()
         #stmplib docs recommend calling ehlo() before & after starttls()
         server.ehlo()
-        server.login(USERNAME_SMTP, PASSWORD_SMTP)
+        server.login(app.config['USERNAME_SMTP'], app.config['PASSWORD_SMTP'])
         server.sendmail(SENDER, recipient, msg.as_string())
         server.close()
     # Display an error message if something goes wrong.
@@ -265,21 +250,32 @@ def index():
                 current_user.subscribed = subscribed
                 current_user.save()
 
-        if(len(new_likes) > app.config['MAX_CHECKS']):
-            flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
-        else:
-            with db:
-                old_likes = [(like.liker, like.liked) for like in (Like.select().where(Like.liker == current_user.id))]
-                for like in new_likes:
-                    if not like in old_likes:
-                        print(old_likes)
-                        print("NEW LIKE!")
-                        Like.create(liker=like[0].id, liked=like[1].id, datetime=datetime.datetime.now(), notified=0)
-                for like in old_likes:
-                    if like not in new_likes:
-                        print("DELETE LIKE!")
+        with db:
+            old_likes = [(like.liker, like.liked) for like in (Like.select().where(Like.liker == current_user.id))]
+            num_likes = 0
+            for like in new_likes:
+                num_likes += 1
+                if not like in old_likes:
+                    if num_likes > app.config['MAX_CHECKS']:
+                        print('Don\'t like:', like)
+                        flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
+                        break
+                    print("NEW LIKE:", like)
+                    Like.create(liker=like[0].id, liked=like[1].id, datetime=datetime.datetime.now(), notified=0)
+            for like in old_likes:
+                if like not in new_likes:
+                    try:
                         del_like = Like.select().where(Like.liker == like[0], Like.liked == like[1]).get()
-                        del_like.delete_instance()
+                        time_diff = datetime.datetime.now() - del_like.datetime
+                        elapsed_m = round(time_diff.days * 1440 + time_diff.seconds / 60)
+                        if elapsed_m >= app.config['UNLIKE_MIN']:
+                            del_like.delete_instance()
+                            print("DELETE LIKE:", like)
+                        else:
+                            flash('Error: you need to wait {} m before unliking {}.'.format(app.config['UNLIKE_MIN'] - elapsed_m, del_like.liked.name))
+                            print("Don\'t unlike:", like)
+                    except Like.DoesNotExist:
+                        pass
 
     current_likes = (Like.select().where(Like.liker == current_user.id))
     liked_users = [like.liked for like in current_likes]
@@ -306,4 +302,4 @@ def index():
                         my_like.notified = 1
                         my_like.save()
 
-    return render_template('index.html', current_user=current_user, users=users, likes=liked_users, matches=matched_users, max_checks=app.config['MAX_CHECKS'])
+    return render_template('index.html', current_user=current_user, users=users, likes=liked_users, matches=matched_users, max_checks=app.config['MAX_CHECKS'], unlike_min=app.config['UNLIKE_MIN'])

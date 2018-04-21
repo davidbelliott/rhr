@@ -7,7 +7,7 @@
 {% block body %}
 <div class="container">
     <h2>Right-Hand Rule</h2>
-    <p>Check the boxes of up to {{ max_checks }} people you're interested in. Nobody can see your selections, but if you and someone else both check each other, you'll both be notified.</p>
+    <p>Check the boxes of up to {{ max_checks }} people you're interested in and submit. Nobody can see your selections, but if you and someone else both check each other, you'll both be notified. After checking someone and submitting, you must wait {{ unlike_min }} minutes before you can uncheck them.</p>
     <p>Key: <span class="like">you like</span>, <span class="match">both like</span></p>
     <form method="post" action="{{ url_for('index') }}">
     <div class="wrapper">
