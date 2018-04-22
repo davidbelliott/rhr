@@ -41,7 +41,7 @@ def send_msg(subject, recipient, text):
         #stmplib docs recommend calling ehlo() before & after starttls()
         server.ehlo()
         server.login(app.config['USERNAME_SMTP'], app.config['PASSWORD_SMTP'])
-        server.sendmail(SENDER, recipient, msg.as_string())
+        server.sendmail(app.config['SENDER'], recipient, msg.as_string())
         server.close()
     # Display an error message if something goes wrong.
     except Exception as e:
