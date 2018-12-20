@@ -49,7 +49,6 @@ def send_msg(subject, recipient, text):
     else:
         print ("Email sent!")
 
-
 app = Flask(__name__)
 app.config.from_object('config.Config')
 app.config.from_object('instance.config')
@@ -71,6 +70,11 @@ class RegistrationForm(FlaskForm):
 
 class ChangePasswordForm(FlaskForm):
     password = wtforms.PasswordField('Current password', validators=[DataRequired()])
+    new_password = wtforms.PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
+    new_password_2 = wtforms.PasswordField('Confirm new password', validators=[DataRequired()])
+    submit = wtforms.SubmitField('Change password')
+
+class ResetPasswordForm(FlaskForm):
     new_password = wtforms.PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
     new_password_2 = wtforms.PasswordField('Confirm new password', validators=[DataRequired()])
     submit = wtforms.SubmitField('Change password')
@@ -123,14 +127,36 @@ def create_tables():
         db.create_tables([User, Like])
 
 def load_users(filename):
-        with open(filename) as tsv:
-            with db:
-                for line in csv.reader(tsv, dialect="excel-tab"):
-                    try:
-                        user = User.create(name=line[0], email=line[1], registered=0, subscribed=0, password_hash='')
-                    except Exception as e:
-                        print("Exception: {}".format(str(e)))
-                    print(user)
+    with open(filename) as tsv:
+        with db:
+            for line in csv.reader(tsv, dialect="excel-tab"):
+                try:
+                    user = User.create(name=line[0], email=line[1], registered=0, subscribed=0, password_hash='')
+                except Exception as e:
+                    print("Exception: {}".format(str(e)))
+                print(user)
+
+def update_users(filename):
+    with open(filename) as tsv:
+        with db:
+            valid_emails = []
+            for line in csv.reader(tsv, dialect="excel-tab"):
+                try:
+                    name = line[0]
+                    email = line[1]
+                    if not User.select().where(User.email == email):
+                        user = User.create(name=name, email=email, registered=0, subscribed=0, password_hash='')
+                        print("New: {}".format(user))
+                    else:
+                        print("Existed: {}".format(email))
+                    valid_emails.append(email)
+                except Exception as e:
+                    print("Exception: {}".format(str(e)))
+
+            query = User.delete().where(User.email not in valid_emails)
+            print("Deleting:")
+            print(query)
+            query.execute()
 
 def make_password(length, alphabet):
     return ''.join(random.choice(alphabet) for _ in range(length))
