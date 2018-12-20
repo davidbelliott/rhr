@@ -15,6 +15,7 @@ import smtplib
 import email.utils
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from itsdangerous import URLSafeTimedSerializer
 
 def send_msg(subject, recipient, text):
     # Create message container - the correct MIME type is multipart/alternative.
@@ -58,6 +59,8 @@ db = SqliteDatabase('app.db')
 login = LoginManager(app)
 login.login_view = 'login'
 
+ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+
 class LoginForm(FlaskForm):
     email = wtforms.StringField('Caltech email', validators=[DataRequired(), Email()])
     password = wtforms.PasswordField('Password', validators=[DataRequired()])
@@ -73,6 +76,10 @@ class ChangePasswordForm(FlaskForm):
     new_password = wtforms.PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
     new_password_2 = wtforms.PasswordField('Confirm new password', validators=[DataRequired()])
     submit = wtforms.SubmitField('Change password')
+
+class ForgotPasswordForm(FlaskForm):
+    email = wtforms.StringField('Caltech email', validators=[DataRequired(), Email()])
+    submit = wtforms.SubmitField('Send password reset email')
 
 class ResetPasswordForm(FlaskForm):
     new_password = wtforms.PasswordField('New password', validators=[DataRequired(), EqualTo('new_password_2', message='Passwords must match')])
@@ -233,6 +240,58 @@ def register():
         return redirect(url_for('login'))
     else:
         return render_template('register.html', form=form)
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        try:
+            with db:
+                user = User.get(User.email == form.email.data.lower())
+                if user.registered:
+                    subject = "RHR password reset requested"
+                    token = ts.dumps(user.email, salt='recover-key')
+                    recover_url = url_for(
+                        'reset_password',
+                        token=token,
+                        _external=True)
+
+                    msg = "If you requested a password reset, please follow this link: {}\nIf you did not request a password reset, please ignore this email.".format(recover_url)
+                    send_msg(subject, user.email, msg)
+        except User.DoesNotExist:
+            pass
+        flash('Check your email. If you are registered, you will have received an email with a password reset link.')
+        return redirect(url_for('login'))
+    else:
+        return render_template('forgot-password.html', form=form)
+
+@app.route('/reset-password/<token>', methods=["GET", "POST"])
+def reset_password(token):
+    try:
+        email = ts.loads(token, salt="recover-key", max_age=86400)
+    except:
+        abort(404)
+
+    success = False
+    form = ResetPasswordForm()
+
+    if form.validate_on_submit():
+        try:
+            with db:
+                user = User.get(User.email == email)
+                user.set_password(form.new_password.data)
+                user.save()
+                flash('Password reset success!')
+                success = True
+        except User.DoesNotExist:
+            pass
+
+    if success:
+        return redirect(url_for('login'))
+    else:
+        return render_template('reset-password.html', form=form, token=token)
 
 @app.route('/change-password', methods=['GET', 'POST'])
 def change_password():
