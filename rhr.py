@@ -374,14 +374,20 @@ def index():
                     matched_users.append(their_like.liker)
 
                     # Notify of match
-                    if my_like.notified == 0 and their_like.notified == 0:
+                    if (not my_like.notified) or (not their_like.notified):
                         flash('New match with {}!'.format(their_user.name))
-                        if their_user.subscribed:
-                            # send notification email
-                            subject = '{} would like to connect with you on RHR'.format(current_user.name)
-                            msg = 'Contact them at {}'.format(current_user.email)
-                            send_msg(subject, their_user.email, msg)
-                            flash('They have been notified.')
+                        users_to_notify = [current_user, their_user]
+                        for i in range(0, len(users_to_notify)):
+                            this_user = users_to_notify[i]
+                            other_user = users_to_notify[len(users_to_notify)-1-i]
+                            if this_user.subscribed:
+                                # send notification email
+                                subject = 'You and {} matched on RHR'.format(other_user.name)
+                                msg = 'Contact them at {}'.format(other_user.email)
+                                if other_user.subscribed:
+                                    msg = 'They have been notified via email. ' + msg
+                                send_msg(subject, this_user.email, msg)
+
                         their_like.notified = 1
                         their_like.save()
                         my_like.notified = 1
