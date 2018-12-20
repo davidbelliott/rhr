@@ -6,4 +6,4 @@ class Config(object):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DEBUG = False
     MAX_CHECKS = 20
-    UNLIKE_MIN = 1
+    UNLIKE_MIN = 69
