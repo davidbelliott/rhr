@@ -51,16 +51,6 @@ p {
     background-color: hotpink;
 }
 
-.wrapper {
-    display: block;
-  margin: 0px 0px 20px 0px;
-  padding: 20px 0px;
-  display: grid;
-  grid-gap: 10px;
-  border-top: 1px solid black;
-  border-bottom: 1px solid black;
-}
-
 .flashes {
     color: red;
 }
@@ -70,18 +60,14 @@ p {
 .wrapper {
   display: flex;
   flex-wrap: wrap;
-}
-
-.wrapper {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  grid-auto-rows: minmax(min-content, auto);
+  margin: 0px 0px 20px 0px;
+  padding: 20px 0px;
+  border-top: 1px solid black;
+  border-bottom: 1px solid black;
 }
 
 .panel {
   /* needed for the flex layout*/
-  margin-left: 5px;
-  margin-right: 5px;
   flex: 1 1 270px;
 }
 
