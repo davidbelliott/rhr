@@ -160,10 +160,11 @@ def update_users(filename):
                 except Exception as e:
                     print("Exception: {}".format(str(e)))
 
-            query = User.delete().where(User.email not in valid_emails)
+            query = User.delete().where(User.email.not_in(valid_emails))
             print("Deleting:")
             print(query)
-            query.execute()
+            n_deleted = query.execute()
+            print(n_deleted)
 
 def make_password(length, alphabet):
     return ''.join(random.choice(alphabet) for _ in range(length))
