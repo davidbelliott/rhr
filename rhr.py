@@ -160,9 +160,17 @@ def update_users(filename):
                 except Exception as e:
                     print("Exception: {}".format(str(e)))
 
+            n_deleted = 0
+            for like in Like.select():
+                print(like.liker.email)
+                if not (like.liker.email in valid_emails and like.liked.email in valid_emails):
+                    like.delete_instance()
+                    n_deleted += 1
+            print("Deleting likes:")
+            print(n_deleted)
+
             query = User.delete().where(User.email.not_in(valid_emails))
-            print("Deleting:")
-            print(query)
+            print("Deleting users:")
             n_deleted = query.execute()
             print(n_deleted)
 
