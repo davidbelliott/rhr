@@ -17,6 +17,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer
 
+
 def send_msg(subject, recipient, text):
     # Create message container - the correct MIME type is multipart/alternative.
     msg = MIMEMultipart('alternative')
@@ -36,14 +37,9 @@ def send_msg(subject, recipient, text):
 
     # Try to send the message.
     try:  
-        server = smtplib.SMTP(app.config['HOST'], app.config['PORT'])
-        server.ehlo()
-        server.starttls()
-        #stmplib docs recommend calling ehlo() before & after starttls()
-        server.ehlo()
-        server.login(app.config['USERNAME_SMTP'], app.config['PASSWORD_SMTP'])
+        server = smtplib.SMTP(app.config['SERVER'])
         server.sendmail(app.config['SENDER'], recipient, msg.as_string())
-        server.close()
+        server.quit()
     # Display an error message if something goes wrong.
     except Exception as e:
         print ("Error: ", e)
