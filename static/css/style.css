@@ -19,14 +19,21 @@ p {
   margin: 0 0 1em 0;
 }
 
-.links {
+.head {
     top: 0;
     left: 0;
     width: 100%;
     background-color: lightgoldenrodyellow;
     border-bottom: 1px solid black;
-    text-align: right;
+    text-align: left;
     padding: 0 20px;
+}
+
+.head::after { 
+   content: " ";
+   display: block; 
+   height: 0; 
+   clear: both;
 }
 
 .footer {
@@ -37,6 +44,15 @@ p {
     padding-bottom: 20px;
     margin-top: 20px;
     font-size: small;
+}
+
+.links {
+    display: block;
+    float: right;
+}
+
+.flash {
+    display: block;
 }
 
 .center {
@@ -51,8 +67,12 @@ p {
     background-color: hotpink;
 }
 
-.flashes {
-    color: red;
+.error {
+    background-color: yellow;
+}
+
+.info {
+    background-color: lightblue;
 }
 
 /* no grid support? */
@@ -69,6 +89,15 @@ p {
 .panel {
   /* needed for the flex layout*/
   flex: 1 1 270px;
+}
+
+.panel > label {
+    display: inline-block;
+    padding-left: 1.4rem;
+}
+
+.panel > input[type="checkbox"] {
+    position: absolute;
 }
 
 /* We need to set the margin used on flex items to 0 as we have gaps in grid.  */
