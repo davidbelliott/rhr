@@ -17,6 +17,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer
 
+def log(logname, text):
+    with open(logname + '.log', 'a+') as f:
+        f.write(text)
+
 def send_msg(subject, recipient, text):
     # Create message container - the correct MIME type is multipart/alternative.
     msg = MIMEMultipart('alternative')
@@ -24,40 +28,28 @@ def send_msg(subject, recipient, text):
     msg['From'] = email.utils.formataddr((app.config['SENDERNAME'], app.config['SENDER']))
     msg['To'] = recipient
 
-    # Record the MIME types of both parts - text/plain and text/html.
     part1 = MIMEText(text, 'plain')
-    #part2 = MIMEText(html, 'html')
-
-    # Attach parts into message container.
-    # According to RFC 2046, the last part of a multipart message, in this case
-    # the HTML message, is best and preferred.
     msg.attach(part1)
-    #msg.attach(part2)
 
     # Try to send the message.
     try:  
-        server = smtplib.SMTP(app.config['HOST'], app.config['PORT'])
-        server.ehlo()
-        server.starttls()
-        #stmplib docs recommend calling ehlo() before & after starttls()
-        server.ehlo()
-        server.login(app.config['USERNAME_SMTP'], app.config['PASSWORD_SMTP'])
+        server = smtplib.SMTP('localhost')
         server.sendmail(app.config['SENDER'], recipient, msg.as_string())
         server.close()
     # Display an error message if something goes wrong.
     except Exception as e:
-        print ("Error: ", e)
-    else:
-        print ("Email sent!")
+        log("error", "Error sending email: {}".format(repr(e)))
 
 app = Flask(__name__)
 app.config.from_object('config.Config')
 app.config.from_object('instance.config')
+app.url_map.strict_slashes = False
 
 db = SqliteDatabase('app.db')
 
 login = LoginManager(app)
 login.login_view = 'login'
+login.login_message_category = "info"
 
 ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
@@ -105,18 +97,6 @@ class User(UserMixin, Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def likes(self):
-        return (User
-            .select()
-            .join(Like, on=Like.to_user)
-            .where(Like.liker == self))
-
-    def liked_by(self):
-        return (User
-            .select()
-            .join(Like, on=Like.from_user)
-            .where(Like.liked == self))
-
 class Like(Model):
     liker = ForeignKeyField(User, backref='likes')
     liked = ForeignKeyField(User, backref='liked_by')
@@ -133,24 +113,20 @@ def create_tables():
     with db:
         db.create_tables([User, Like])
 
-def load_users(filename):
-    with open(filename) as tsv:
-        with db:
-            for line in csv.reader(tsv, dialect="excel-tab"):
-                try:
-                    user = User.create(name=line[0], email=line[1], registered=0, subscribed=0, password_hash='')
-                except Exception as e:
-                    print("Exception: {}".format(str(e)))
-                print(user)
+def fix_case():
+    with db:
+        for user in User.select():
+            user.email = user.email.lower()
+            user.save()
 
-def update_users(filename):
+def set_users(filename):
     with open(filename) as tsv:
         with db:
             valid_emails = []
             for line in csv.reader(tsv, dialect="excel-tab"):
                 try:
                     name = line[0]
-                    email = line[1]
+                    email = line[1].lower()
                     if not User.select().where(User.email == email):
                         user = User.create(name=name, email=email, registered=0, subscribed=0, password_hash='')
                         print("New: {}".format(user))
@@ -160,9 +136,18 @@ def update_users(filename):
                 except Exception as e:
                     print("Exception: {}".format(str(e)))
 
+            # This could be done much better with a bulk SQL delete, but appears to be buggy in peewee
+            print("Deleting likes:")
+            n_deleted = 0
+            for like in Like.select():
+                if (like.liker.email not in valid_emails) or (like.liked.email not in valid_emails):
+                    n_deleted += 1
+                    like.delete_instance()
+                    print("Deleting: {} -> {}".format(like.liker.email, like.liked.email))
+            print(n_deleted)
+
             query = User.delete().where(User.email.not_in(valid_emails))
-            print("Deleting:")
-            print(query)
+            print("Deleting users:")
             n_deleted = query.execute()
             print(n_deleted)
 
@@ -200,7 +185,7 @@ def login():
             pass
 
         if not found_user or not user.check_password(form.password.data): # unsuccessful login
-            flash('Invalid email or password')
+            flash('Invalid email or password', 'error')
             return redirect(url_for('login'))
         else: # successful login
             if user.registered == 0: # first login
@@ -236,7 +221,7 @@ def register():
                     send_msg(subject, user.email, msg)
         except User.DoesNotExist:
             pass
-        flash('Check your email. If you are not already registered, you will have received an email with a temp password.')
+        flash('Check your email. If you are not already registered, you will have received an email with a temp password.', 'info')
             
         return redirect(url_for('login'))
     else:
@@ -263,7 +248,7 @@ def forgot_password():
                     send_msg(subject, user.email, msg)
         except User.DoesNotExist:
             pass
-        flash('Check your email. If you are registered, you will have received an email with a password reset link.')
+        flash('Check your email. If you are registered, you will have received an email with a password reset link.', 'info')
         return redirect(url_for('login'))
     else:
         return render_template('forgot-password.html', form=form)
@@ -284,7 +269,7 @@ def reset_password(token):
                 user = User.get(User.email == email)
                 user.set_password(form.new_password.data)
                 user.save()
-                flash('Password reset success!')
+                flash('Password reset success!', 'info')
                 success = True
         except User.DoesNotExist:
             pass
@@ -303,10 +288,10 @@ def change_password():
             if(current_user.check_password(form.password.data)):
                 current_user.set_password(form.new_password.data)
                 current_user.save()
-                flash('Password change success!')
+                flash('Password change success!', 'info')
                 success = True
             else:
-                flash('Incorrect current password')
+                flash('Incorrect current password', 'error')
 
     if success:
         return redirect(url_for('login'))
@@ -327,7 +312,6 @@ def index():
                 if liked_user is not None:
                     new_likes.append((current_user, liked_user))
             except ValueError: # this is not a user key
-                print(key)
                 if key == 'emails':
                     subscribed = True
         # Update email preferences
@@ -343,10 +327,9 @@ def index():
                 num_likes += 1
                 if not like in old_likes:
                     if num_likes > app.config['MAX_CHECKS']:
-                        print('Don\'t like:', like)
-                        flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']))
+                        flash('Error: you can\'t check more than {} people.'.format(app.config['MAX_CHECKS']), 'error')
                         break
-                    print("NEW LIKE:", like)
+                    log("info", "NEW LIKE: {}".format(repr(like)))
                     Like.create(liker=like[0].id, liked=like[1].id, datetime=datetime.datetime.now(), notified=0)
             for like in old_likes:
                 if like not in new_likes:
@@ -356,10 +339,9 @@ def index():
                         elapsed_m = round(time_diff.days * 1440 + time_diff.seconds / 60)
                         if elapsed_m >= app.config['UNLIKE_MIN']:
                             del_like.delete_instance()
-                            print("DELETE LIKE:", like)
+                            log("info", "DELETE LIKE: {}".format(repr(like)))
                         else:
-                            flash('Error: you need to wait {} m before unliking {}.'.format(app.config['UNLIKE_MIN'] - elapsed_m, del_like.liked.name))
-                            print("Don\'t unlike:", like)
+                            flash('Error: you need to wait {} m before unliking {}.'.format(app.config['UNLIKE_MIN'] - elapsed_m, del_like.liked.name), 'error')
                     except Like.DoesNotExist:
                         pass
 
@@ -376,7 +358,7 @@ def index():
 
                     # Notify of match
                     if (not my_like.notified) or (not their_like.notified):
-                        flash('New match with {}!'.format(their_user.name))
+                        flash('New match with {}!'.format(their_user.name), 'match')
                         users_to_notify = [current_user, their_user]
                         for i in range(0, len(users_to_notify)):
                             this_user = users_to_notify[i]
