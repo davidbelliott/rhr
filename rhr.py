@@ -35,7 +35,7 @@ def send_msg(subject, recipient, text):
     try:  
         server = smtplib.SMTP('localhost')
         server.sendmail(app.config['SENDER'], recipient, msg.as_string())
-        server.close()
+        server.quit()
     # Display an error message if something goes wrong.
     except Exception as e:
         log("error", "Error sending email: {}".format(repr(e)))
