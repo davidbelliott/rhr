@@ -119,7 +119,7 @@ def fix_case():
             user.email = user.email.lower()
             user.save()
 
-def set_users(filename):
+def set_users(filename, earliest_grad_year):
     with open(filename) as tsv:
         with db:
             valid_emails = []
@@ -127,29 +127,33 @@ def set_users(filename):
                 try:
                     name = line[0]
                     email = line[1].lower()
+                    year = int(line[2].strip())
+                    print(name)
+                    print(email)
+                    print(year)
+                    if year < earliest_grad_year or "@" not in email or name == "":
+                        continue
                     if not User.select().where(User.email == email):
                         user = User.create(name=name, email=email, registered=0, subscribed=0, password_hash='')
                         print("New: {}".format(user))
                     else:
                         print("Existed: {}".format(email))
+                        pass
                     valid_emails.append(email)
                 except Exception as e:
                     print("Exception: {}".format(str(e)))
 
             # This could be done much better with a bulk SQL delete, but appears to be buggy in peewee
-            print("Deleting likes:")
             n_deleted = 0
             for like in Like.select():
                 if (like.liker.email not in valid_emails) or (like.liked.email not in valid_emails):
                     n_deleted += 1
                     like.delete_instance()
-                    print("Deleting: {} -> {}".format(like.liker.email, like.liked.email))
-            print(n_deleted)
+            print(f'Deleted likes: {n_deleted}')
 
             query = User.delete().where(User.email.not_in(valid_emails))
-            print("Deleting users:")
             n_deleted = query.execute()
-            print(n_deleted)
+            print(f'Deleted users: {n_deleted}')
 
 def make_password(length, alphabet):
     return ''.join(random.choice(alphabet) for _ in range(length))
