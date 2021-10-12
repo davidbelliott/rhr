@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 from itsdangerous import URLSafeTimedSerializer
 
 def log(logname, text):
+    print(f'{logname}: {text}')
     with open(logname + '.log', 'a+') as f:
         f.write(text)
 
@@ -33,9 +34,13 @@ def send_msg(subject, recipient, text):
 
     # Try to send the message.
     try:  
-        server = smtplib.SMTP('localhost')
+        server = smtplib.SMTP(app.config['SMTP_HOST'], port=app.config['SMTP_PORT'])
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(app.config['SMTP_USERNAME'], app.config['SMTP_PASSWORD'])
         server.sendmail(app.config['SENDER'], recipient, msg.as_string())
-        server.quit()
+        server.close()
     # Display an error message if something goes wrong.
     except Exception as e:
         log("error", "Error sending email: {}".format(repr(e)))
