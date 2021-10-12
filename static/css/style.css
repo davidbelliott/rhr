@@ -87,7 +87,11 @@ p {
 
 .panel {
   /* needed for the flex layout*/
-  flex: 1 1 270px;
+  flex: 1 1 320px;
+}
+
+.zeroheight {
+  height: 0px;
 }
 
 .panel > label {

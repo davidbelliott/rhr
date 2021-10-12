@@ -19,6 +19,9 @@
         </div>
         {% endif %}
         {% endfor %}
+	{% for i in range(8) %}
+	<div class="panel zeroheight"></div>
+	{% endfor %}
     </div>
     <input id="emailBox" type="checkbox" name="emails"{% if current_user.subscribed %} checked="checked"{% endif %}>
     <label for="emailBox">Receive emails?</label>
